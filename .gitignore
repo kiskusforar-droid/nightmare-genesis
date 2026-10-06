@@ -1,0 +1,12 @@
+# GitHub ignores generated build artifacts and local SGDK output
+out/
+*.bin
+*.gen
+*.smd
+*.md
+*.map
+*.sym
+*.lst
+*.o
+*.a
+.DS_Store
