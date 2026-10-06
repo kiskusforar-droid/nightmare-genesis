@@ -8,6 +8,11 @@
 #define MAX_KEYS 3
 #define MAX_ENEMIES 5
 
+#define PLAYER_START_X 1
+#define PLAYER_START_Y 1
+#define EXIT_X 17
+#define EXIT_Y 12
+
 typedef struct
 {
     s16 x;
