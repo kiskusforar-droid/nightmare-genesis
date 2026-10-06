@@ -1,22 +1,35 @@
 #include <genesis.h>
-#include <stdlib.h>
+#include <string.h>
 
 #include "game.h"
 
-#define MAX_KEYS 3
-#define MAX_ENEMIES 4
-#define PLAYER_START_X 1
-#define PLAYER_START_Y 1
-#define EXIT_X 16
-#define EXIT_Y 10
+#define EXIT_X 17
+#define EXIT_Y 12
+#define TITLE_LINE_1  "NIGHTMARE GENESIS"
+#define TITLE_LINE_2  "PRESS START"
+#define TITLE_LINE_3  "FIND 3 KEYS + ESCAPE"
 
 static char map[MAP_H][MAP_W];
 static Player player;
 static Enemy enemies[MAX_ENEMIES];
 static u8 keyTaken[MAX_KEYS];
-static u8 gameOver;
-static u8 victory;
-static u16 frameCount;
+static GameState state;
+static u16 frameCounter;
+static u8 readyToRestart;
+
+static const s16 keyPositions[MAX_KEYS][2] = {
+    { 3, 2 },
+    { 14, 4 },
+    { 8, 10 }
+};
+
+static const s16 enemyPositions[MAX_ENEMIES][2] = {
+    { 15, 2 },
+    { 9, 6 },
+    { 16, 8 },
+    { 4, 9 },
+    { 12, 11 }
+};
 
 static void setTile(s16 x, s16 y, char value)
 {
@@ -56,16 +69,10 @@ static u8 isKeyAt(s16 x, s16 y, u8 keyIndex)
         return 0;
     }
 
-    static const s16 keyPos[MAX_KEYS][2] = {
-        { 3, 2 },
-        { 12, 7 },
-        { 7, 9 }
-    };
-
-    return keyPos[keyIndex][0] == x && keyPos[keyIndex][1] == y;
+    return keyPositions[keyIndex][0] == x && keyPositions[keyIndex][1] == y;
 }
 
-static void buildLevel(void)
+static void buildMap(void)
 {
     for (s16 y = 0; y < MAP_H; ++y)
     {
@@ -87,24 +94,29 @@ static void buildLevel(void)
         setTile(MAP_W - 1, y, '#');
     }
 
-    for (s16 x = 4; x < 14; ++x)
+    for (s16 x = 3; x < 9; ++x)
     {
         setTile(x, 4, '#');
     }
 
-    for (s16 y = 2; y < 9; ++y)
+    for (s16 x = 11; x < 17; ++x)
+    {
+        setTile(x, 4, '#');
+    }
+
+    for (s16 y = 2; y < 8; ++y)
     {
         setTile(8, y, '#');
     }
 
-    for (s16 x = 11; x < 16; ++x)
+    for (s16 y = 8; y < 12; ++y)
     {
-        setTile(x, 7, '#');
+        setTile(11, y, '#');
     }
 
-    for (s16 x = 5; x < 9; ++x)
+    for (s16 x = 5; x < 14; ++x)
     {
-        setTile(x, 9, '#');
+        setTile(x, 8, '#');
     }
 
     setTile(EXIT_X, EXIT_Y, 'E');
@@ -112,18 +124,124 @@ static void buildLevel(void)
 
 static void placeEnemies(void)
 {
-    static const s16 startPositions[MAX_ENEMIES][2] = {
-        { 14, 2 },
-        { 13, 8 },
-        { 4, 7 },
-        { 15, 5 }
-    };
-
     for (u8 i = 0; i < MAX_ENEMIES; ++i)
     {
-        enemies[i].x = startPositions[i][0];
-        enemies[i].y = startPositions[i][1];
+        enemies[i].x = enemyPositions[i][0];
+        enemies[i].y = enemyPositions[i][1];
         enemies[i].alive = 1;
+        enemies[i].speed = 1 + (i % 2);
+    }
+}
+
+static void tryPlayerMove(s16 dx, s16 dy)
+{
+    if (state != SCREEN_PLAYING)
+    {
+        return;
+    }
+
+    s16 nx = player.x + dx;
+    s16 ny = player.y + dy;
+
+    if (isWall(nx, ny) || isEnemyAt(nx, ny))
+    {
+        return;
+    }
+
+    player.x = nx;
+    player.y = ny;
+
+    for (u8 i = 0; i < MAX_KEYS; ++i)
+    {
+        if (!keyTaken[i] && player.x == keyPositions[i][0] && player.y == keyPositions[i][1])
+        {
+            keyTaken[i] = 1;
+            player.keys++;
+        }
+    }
+
+    if (player.x == EXIT_X && player.y == EXIT_Y && player.keys >= MAX_KEYS)
+    {
+        state = SCREEN_WIN;
+    }
+}
+
+static void moveEnemies(void)
+{
+    for (u8 i = 0; i < MAX_ENEMIES; ++i)
+    {
+        if (!enemies[i].alive || state != SCREEN_PLAYING)
+        {
+            continue;
+        }
+
+        if ((frameCounter % (12 - enemies[i].speed)) != (u16)i)
+        {
+            continue;
+        }
+
+        s16 dx = 0;
+        s16 dy = 0;
+
+        if (player.x > enemies[i].x)
+        {
+            dx = 1;
+        }
+        else if (player.x < enemies[i].x)
+        {
+            dx = -1;
+        }
+
+        if (player.y > enemies[i].y)
+        {
+            dy = 1;
+        }
+        else if (player.y < enemies[i].y)
+        {
+            dy = -1;
+        }
+
+        if (dx != 0 && dy != 0)
+        {
+            if ((frameCounter + i) & 1)
+            {
+                dy = 0;
+            }
+            else
+            {
+                dx = 0;
+            }
+        }
+
+        s16 nx = enemies[i].x + dx;
+        s16 ny = enemies[i].y + dy;
+
+        if (!isWall(nx, ny) && !(nx == player.x && ny == player.y))
+        {
+            enemies[i].x = nx;
+            enemies[i].y = ny;
+        }
+
+        if (enemies[i].x == player.x && enemies[i].y == player.y)
+        {
+            if (player.invulnerable == 0)
+            {
+                player.hp--;
+                player.invulnerable = 20;
+                if (player.hp == 0)
+                {
+                    state = SCREEN_LOSE;
+                }
+            }
+        }
+    }
+}
+
+static void resetPlayerInvulnerability(void)
+{
+    if (player.invulnerable > 0)
+    {
+        player.invulnerable--;
     }
 }
 
@@ -137,138 +255,54 @@ void gameInit(void)
 
 void gameReset(void)
 {
-    buildLevel();
-    player.x = PLAYER_START_X;
-    player.y = PLAYER_START_Y;
-    player.health = 5;
+    buildMap();
+    player.x = 1;
+    player.y = 1;
+    player.hp = 5;
     player.keys = 0;
-    gameOver = 0;
-    victory = 0;
-    frameCount = 0;
+    player.invulnerable = 0;
+    frameCounter = 0;
+    readyToRestart = 0;
+
     for (u8 i = 0; i < MAX_KEYS; ++i)
     {
         keyTaken[i] = 0;
     }
+
     placeEnemies();
-}
-
-static void tryPlayerMove(s16 dx, s16 dy)
-{
-    if (gameOver || victory)
-    {
-        return;
-    }
-
-    s16 nextX = player.x + dx;
-    s16 nextY = player.y + dy;
-
-    if (!isWall(nextX, nextY) && !isEnemyAt(nextX, nextY))
-    {
-        player.x = nextX;
-        player.y = nextY;
-    }
-
-    for (u8 i = 0; i < MAX_KEYS; ++i)
-    {
-        static const s16 keyPos[MAX_KEYS][2] = {
-            { 3, 2 },
-            { 12, 7 },
-            { 7, 9 }
-        };
-
-        if (!keyTaken[i] && player.x == keyPos[i][0] && player.y == keyPos[i][1])
-        {
-            keyTaken[i] = 1;
-            player.keys++;
-        }
-    }
-
-    if (player.x == EXIT_X && player.y == EXIT_Y && player.keys >= MAX_KEYS)
-    {
-        victory = 1;
-    }
-}
-
-static void moveEnemies(void)
-{
-    for (u8 i = 0; i < MAX_ENEMIES; ++i)
-    {
-        if (!enemies[i].alive)
-        {
-            continue;
-        }
-
-        s16 dx = 0;
-        s16 dy = 0;
-
-        if (frameCount % 18 == i)
-        {
-            if (player.x > enemies[i].x)
-            {
-                dx = 1;
-            }
-            else if (player.x < enemies[i].x)
-            {
-                dx = -1;
-            }
-
-            if (player.y > enemies[i].y)
-            {
-                dy = 1;
-            }
-            else if (player.y < enemies[i].y)
-            {
-                dy = -1;
-            }
-
-            if (dx != 0 && dy != 0)
-            {
-                if (rand() & 1)
-                {
-                    dy = 0;
-                }
-                else
-                {
-                    dx = 0;
-                }
-            }
-
-            s16 nextX = enemies[i].x + dx;
-            s16 nextY = enemies[i].y + dy;
-
-            if (!isWall(nextX, nextY) && !(nextX == player.x && nextY == player.y))
-            {
-                enemies[i].x = nextX;
-                enemies[i].y = nextY;
-            }
-
-            if (enemies[i].x == player.x && enemies[i].y == player.y)
-            {
-                player.health--;
-                if (player.health == 0)
-                {
-                    gameOver = 1;
-                }
-            }
-        }
-    }
+    state = SCREEN_TITLE;
 }
 
 void gameUpdate(void)
 {
-    if (gameOver || victory)
+    u16 pad = JOY_readJoypad(JOY_1);
+
+    if (state == SCREEN_TITLE)
     {
-        u16 pad = JOY_readJoypad(JOY_1);
         if (pad & BUTTON_START)
         {
+            state = SCREEN_PLAYING;
             gameReset();
+            player.x = 1;
+            player.y = 1;
+            buildMap();
         }
         return;
     }
 
-    frameCount++;
+    if (state == SCREEN_WIN || state == SCREEN_LOSE)
+    {
+        if (pad & BUTTON_START)
+        {
+            gameReset();
+            state = SCREEN_PLAYING;
+        }
+        return;
+    }
 
-    u16 pad = JOY_readJoypad(JOY_1);
+    frameCounter++;
+    resetPlayerInvulnerability();
+
     s16 dx = 0;
     s16 dy = 0;
 
@@ -298,77 +332,76 @@ void gameUpdate(void)
     moveEnemies();
 }
 
-void gameRender(void)
+static void drawTileMap(void)
 {
-    VDP_clearTextArea(BG_A, 0, 0, 40, 28);
-
     char line[MAP_W + 1];
-    char finalText[64];
 
     for (s16 y = 0; y < MAP_H; ++y)
     {
         for (s16 x = 0; x < MAP_W; ++x)
         {
-            char c = map[y][x];
+            char tile = map[y][x];
 
             if (player.x == x && player.y == y)
             {
-                c = 'P';
-            }
-            else if (isEnemyAt(x, y))
-            {
-                c = 'M';
-            }
-            else if (x == EXIT_X && y == EXIT_Y && player.keys >= MAX_KEYS)
-            {
-                c = 'E';
+                tile = 'P';
             }
             else if (x == EXIT_X && y == EXIT_Y)
             {
-                c = 'E';
+                tile = 'E';
+            }
+            else if (isEnemyAt(x, y))
+            {
+                tile = 'M';
             }
             else if (isKeyAt(x, y, 0) || isKeyAt(x, y, 1) || isKeyAt(x, y, 2))
             {
-                c = 'K';
+                tile = 'K';
             }
 
-            line[x] = c;
+            line[x] = tile;
         }
 
         line[MAP_W] = '\0';
         VDP_drawText(line, 2, 2 + y);
     }
-
-    VDP_drawText("NIGHTMARE GENESIS", 10, 1);
-    VDP_drawText("OBJECTIVE: GET 3 KEYS", 2, 15);
-
-    sprintf(finalText, "HP:%u  KEYS:%u/3", player.health, player.keys);
-    VDP_drawText(finalText, 2, 16);
-
-    if (victory)
-    {
-        VDP_drawText("YOU ESCAPED!", 10, 20);
-        VDP_drawText("PRESS START TO TRY AGAIN", 5, 22);
-    }
-    else if (gameOver)
-    {
-        VDP_drawText("THE HOUSE WON", 10, 20);
-        VDP_drawText("PRESS START TO RESTART", 5, 22);
-    }
 }
 
-int main(void)
+void gameRender(void)
 {
-    SYS_init();
-    VDP_init();
-    gameInit();
+    VDP_clearTextArea(BG_A, 0, 0, 40, 28);
 
-    while (1)
+    if (state == SCREEN_TITLE)
     {
-        VDP_waitVSync();
-        gameUpdate();
-        gameRender();
+        VDP_drawText(TITLE_LINE_1, 7, 4);
+        VDP_drawText(TITLE_LINE_2, 10, 8);
+        VDP_drawText(TITLE_LINE_3, 5, 10);
+        VDP_drawText("A hospital has gone silent.", 4, 12);
+        VDP_drawText("The keys are hidden in the dark.", 4, 13);
+        return;
     }
 
-    return 0;
+    drawTileMap();
+
+    if (state == SCREEN_PLAYING)
+    {
+        char hud[32];
+        sprintf(hud, "HP:%u  KEYS:%u/3", player.hp, player.keys);
+        VDP_drawText(hud, 2, 1);
+        VDP_drawText("GOAL: GET 3 KEYS + ESCAPE", 2, 17);
+        return;
+    }
+
+    if (state == SCREEN_WIN)
+    {
+        VDP_drawText("YOU ESCAPED!", 10, 6);
+        VDP_drawText("THE HOSPITAL IS STILL THERE.", 2, 8);
+        VDP_drawText("PRESS START TO PLAY AGAIN", 4, 11);
+    }
+    else if (state == SCREEN_LOSE)
+    {
+        VDP_drawText("THE HOSPITAL WON.", 8, 6);
+        VDP_drawText("PRESS START TO TRY AGAIN", 5, 9);
+    }
 }
+

@@ -1,42 +1,48 @@
 # Nightmare Genesis
 
-Nightmare Genesis is an original 2D survival horror game prototype designed for the Sega Genesis / Mega Drive. It is not a remake of any existing game; it is a new project with a horror atmosphere, exploration, enemy pressure, and a short but complete loop: explore the map, collect the three keys, reach the exit, and survive.
+Nightmare Genesis is an original 2D survival horror game prototype for Sega Genesis / Mega Drive.
 
-## Features
+This second iteration expands the project from a minimal proof of concept into a more complete prototype with:
 
-- Original IP and story concept
-- 2D top-down exploration with a survival-horror mood
-- Three keys to collect before escaping
-- Several roaming enemies
-- Health system and simple risk/reward loop
-- Designed for SGDK (Sega Genesis C development kit)
+- title screen and loop flow
+- clearer objective and story framing
+- bigger map layout with corridors and rooms
+- more enemies with simple pursuit behavior
+- health, keys, escape condition, and restart flow
+- more readable HUD and gameplay state management
+
+## Story pitch
+
+You wake up in an abandoned clinic beneath a flooded town. The power is gone, the corridors are silent, and the only way out is to recover the three ritual keys hidden in the hospital wing before the creatures stalking the halls reach you.
 
 ## Controls
 
 - D-pad: move
-- A / B / C: reserved for future actions (currently the game keeps the loop simple and acts on movement only)
-- Reset: start the game again after a defeat or victory
+- Start: confirm/restart
+- A/B/C: reserved for future mechanics and special actions
 
-## Build instructions
+## Build
 
-1. Install SGDK on your machine.
-2. Clone this repository and open it in a shell.
-3. Make sure SGDK is available at `/opt/sgdk` or update `Makefile` to match your local SGDK path.
-4. Run:
+1. Install SGDK.
+2. Update the SGDK path in `Makefile` if needed.
+3. Run:
 
 ```bash
 make
 ```
 
-5. If your environment is configured with a Mega Drive emulator, run the generated ROM.
+4. Launch the generated ROM in your Mega Drive emulator.
+
+## Current gameplay loop
+
+1. Start in the title screen.
+2. Collect the three keys.
+3. Reach the exit while avoiding monsters.
+4. If your health reaches zero, the game ends and you can restart.
 
 ## Project structure
 
-- `src/main.c`: entry point
-- `src/game.h`: public game API
-- `src/game.c`: gameplay loop, logic, rendering
-- `Makefile`: SGDK build configuration
-
-## Notes
-
-This project is intentionally designed as a compact, playable prototype, not a full commercial-scale game engine. It is a solid foundation for ongoing iteration, content expansion, enemy variation, new rooms, and art/audio integration.
+- `src/main.c`: init and main loop
+- `src/game.h`: shared declarations
+- `src/game.c`: gameplay implementation
+- `Makefile`: build settings
